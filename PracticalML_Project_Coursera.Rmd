@@ -1,0 +1,132 @@
+---
+title: "Practical Machine Learning Project- Coursera"
+output:
+  pdf_document: default
+  html_document:
+    pandoc_args:
+    - +RTS
+    - -K64m
+    - -RTS
+---
+
+##Background on the Project:
+
+#####Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants
+
+####Lets Read in the Data:
+
+```{r}
+
+library(caret)
+library(rpart)
+library(randomForest)
+
+#set urls to variables
+train_data_url<- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test_data_url<- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+#read csvs from the urls
+train <- read.csv(url(train_data_url), na.strings=c("NA","#DIV/0!",""))
+test <- read.csv(url(test_data_url), na.strings=c("NA","#DIV/0!",""))
+
+```
+
+#####Set seed and Partition the training data into a training and data set:
+
+```{r}
+#set seed for reproducible randomness
+set.seed(123)
+
+
+#Now using the training set, partition in two- trying to predict the train$classe variable
+trainset<- createDataPartition(y=train$classe, p=0.6, list=F)
+train1<- train[trainset, ]
+test1<- train[-trainset, ]
+
+```
+
+## Clean the Data:
+
+```{r}
+#Take out variable with majority NA's
+NAs <- sapply(train1, function(x) mean(is.na(x))) > 0.90
+train1 <- train1[, NAs==F]
+test1 <- test1[, NAs==F]
+
+#remove near zero var variables
+zerovar<- nearZeroVar(train1)
+
+train1<- train1[, -zerovar]
+test1<- test1[, -zerovar]
+
+#remove variables that are garbagey- dont help in analysis, timestamp, etc
+train1 <- train1[, -(1:5)]
+test1 <- test1[, -(1:5)]
+
+#take out first column- will affect accuracy if left in
+train1<-train1[,-1]
+
+```
+
+## Prediction:
+
+###First prediction we'll try using decision trees:
+
+```{r}
+#predict with decision trees
+fit1 <- rpart(classe ~ ., data=train1, method="class")
+
+predict1 <- predict(fit1, test1, type = "class")
+confmatrix <- confusionMatrix(predict1, test1$classe)
+confmatrix
+
+```
+
+#####An okay result, but not as accurate as we would like.
+
+###Next we try Random Forests:
+
+```{r}
+
+#predict with Random Forest
+fit2 <- randomForest(classe ~ ., data=train1)
+predict2 <- predict(fit2, test1, type = "class")
+confmatrixrf <- confusionMatrix(predict2, test1$classe)
+confmatrixrf 
+
+
+```
+
+####This is a much better result in terms of accurcacy and predictive success.
+
+#####Now we apply this model to the test data:
+
+#####Remove NA's from test data:
+```{r}
+test[is.na(test)]<-0
+```
+
+```{r}
+
+#Predict for the test 20 items in the test set
+predicttestset <- predict(fit2, test, type = "class")
+predicttestset
+
+
+```
+
+###Submit the predictions using a submit function:
+
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predicttestset)
+
+```
+
